@@ -18,6 +18,8 @@ void errorCode::clearAllErrors(){
     errorFlag = 0;
 }
 void errorCode::printError(){
+    Serial.print("Target: ");
+    Serial.println(errorFlag & ERROR_TARGET);
     Serial.print("Pedal1: ");
     Serial.println(errorFlag & ERROR_PEDAL1);
     Serial.print("Pedal2: ");
