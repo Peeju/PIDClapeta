@@ -7,7 +7,7 @@
 #define ELPWM 12
 #define throttlePositionSensor1 A5
 #define throttlePositionSensor2 A4 //!A5 is Just for testing, need to be 2 different inputs
-#define pedalPositionSensor1 A2
+#define pedalPositionSensor1 A1
 #define pedalPositionSensor2 A2 //!Just for testing, need to be 2 different inputs
 #define maxPWMValue 150
 #define minPWMValue 60
@@ -23,6 +23,10 @@
 #define tpsUpperBoundry1  789
 #define tpsLowerBoundry2 729
 #define tpsUpperBoundry2 231
+#define ppsLowerBoundry1 200
+#define ppsUpperBoundry1 900
+#define ppsLowerBoundry2 200
+#define ppsUpperBoundry2 900
 #define pedalLED 13
 #define throttleLED 13
 #define targetLED 13
@@ -48,9 +52,9 @@ If the throttle position differs by more that 10% from excepted target for more 
 
 Software:
 Todo: Check at start for limits - idle check
-Todo: Individual error check - LED for each type of error
 Todo: Manual mode - potentiometer on the case for easy dyno tuning - Automatic, Potentiometer control, Full Throttle
 Todo: Debounce butoane shifter
+Todo: P1 error
 
 Hardware:
 Todo: Resistor pull-up/pull-down pentru pinii A
@@ -123,13 +127,14 @@ void loop() {
         error.setError(errorCode::ERROR_THROTTLE2);
     else if (error.hasError(errorCode::ERROR_THROTTLE2) == true)
         error.clearError(errorCode::ERROR_THROTTLE2);
-    
-    //Todo: lower-upper boundries 
-    if (pedalPosition1 < 100 || pedalPosition1 > 1024) error.setError(errorCode::ERROR_PEDAL1);
+  
+    if (pedalPosition1 < ppsLowerBoundry1 - sensorToleranceLow || pedalPosition1 > ppsUpperBoundry1 + sensorToleranceHigh) 
+      error.setError(errorCode::ERROR_PEDAL1);
     else if (error.hasError(errorCode::ERROR_PEDAL1)==true)
         error.clearError(errorCode::ERROR_PEDAL1);
     
-    if (pedalPosition2 < 0 || pedalPosition2 > 1024) error.setError(errorCode::ERROR_PEDAL2);
+    if (pedalPosition2 < ppsLowerBoundry2 - sensorToleranceLow || pedalPosition2 > ppsUpperBoundry2 + sensorToleranceHigh) 
+      error.setError(errorCode::ERROR_PEDAL2);
     else if (error.hasError(errorCode::ERROR_PEDAL2)==true)
         error.clearError(errorCode::ERROR_PEDAL2);
 
@@ -146,7 +151,7 @@ void loop() {
 
     currentMillis = millis();
     input = map(input, tpsLowerBoundry1, tpsUpperBoundry1, 0, 255);
-    setpoint = map(setpoint, 100, 1024, 0, 255);
+    setpoint = map(setpoint, ppsLowerBoundry1, ppsUpperBoundry1, 0, 255);
 
 
 
@@ -156,7 +161,7 @@ void loop() {
             plausabilityTime = currentMillis;} 
         else {
             unsigned long timeElapsed = currentMillis - plausabilityTime;
-            if (timeElapsed >= targetTime && error.hasAnyErrors()!=0)
+            if (timeElapsed >= targetTime && error.hasAnyErrors()==0)
                 error.setError(errorCode::ERROR_TARGET);
             }
     } 
@@ -172,35 +177,38 @@ void loop() {
         if(error.hasError(errorCode::ERROR_PEDAL1))  digitalWrite(pedalLED, HIGH);
         if(error.hasError(errorCode::ERROR_PEDAL2)) digitalWrite(pedalLED, HIGH);
         if(error.hasError(errorCode::ERROR_PEDALGENERAL)) digitalWrite(pedalLED, HIGH);
-        if(error.hasError(errorCode::ERROR_THROTTLE1)) digitalWrite(throttleLED, HIGH);
+        if(error.hasError(errorCode::ERROR_THROTTLE1)) {
+        
+          if(error.hasError(errorCode::ERROR_THROTTLE2) == 0) 
+            input = map(throttlePosition2, tpsLowerBoundry2, tpsUpperBoundry2, 0, 255);
+          else digitalWrite(SDCPin, HIGH); 
+          digitalWrite(throttleLED, HIGH);
+        }
         if(error.hasError(errorCode::ERROR_THROTTLE2)) digitalWrite(throttleLED, HIGH);
         if(error.hasError(errorCode::ERROR_THROTTLEGENERAL)) digitalWrite(throttleLED, HIGH);
         if(error.hasError(errorCode::ERROR_TARGET)) digitalWrite(targetLED, HIGH);
-    
-        if(errorTime==0) errorTime = currentMillis;
-        else if (currentMillis-errorTime>=errorTimeConstant && input>=10) {
-            digitalWrite(SDCPin, HIGH); 
-            SDCOpenTime = millis();
-            }
+        
         
     
-    }
+        if(errorTime==0) errorTime = currentMillis;
+        if (currentMillis-errorTime>=errorTimeConstant)
+          if(input>=10) {
+          digitalWrite(SDCPin, HIGH); 
+          SDCOpenTime = millis();
+          }
+      }
     else { 
         digitalWrite(pedalLED, LOW);
         digitalWrite(throttleLED, LOW);
         digitalWrite(targetLED, LOW);
-        if (currentMillis-SDCOpenTime<=1000){
-            digitalWrite(SDCPin, LOW);
-            
-            
+        if (currentMillis-SDCOpenTime>=errorTimeConstant){
+            digitalWrite(SDCPin, LOW);    
         } 
-        else digitalWrite(SDCPin, LOW);
+        
         errorTime = 0;
        
     }
-    //!!Delete serials
-    // Serial.println("NL");
-    Serial.println(setpoint);
+    
 
  
      //*PID Computing

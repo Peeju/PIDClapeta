@@ -30,7 +30,7 @@ public:
     void printError();
 
 private:
-    uint16_t errorFlag;
+    unsigned short errorFlag;
     
 
 };
