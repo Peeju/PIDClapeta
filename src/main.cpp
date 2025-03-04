@@ -27,14 +27,17 @@
 #define ppsUpperBoundry1 900
 #define ppsLowerBoundry2 200
 #define ppsUpperBoundry2 900
-#define pedalLED 13
-#define throttleLED 13
+#define pedalLED 7
+#define throttleLED 6
 #define targetLED 13
 #define SDCPin 4
 #define faultyPin 13
 #define targetTime 3000
 #define errorTimeConstant 3000
-
+#define upshiftPIN 8
+#define downshiftPIN 9
+#define upshiftTimePotentiometer A6
+#define downshiftTimePotentiometer A6
 
 /*
 * Throttle position 1 311-725
@@ -49,11 +52,11 @@ Enable for SCS - no difference
 Plausability individual senzori pedala
 Plausability individual senzori clapeta
 If the throttle position differs by more that 10% from excepted target for more that 500 ms
+Debounce butoane shifter
 
 Software:
 Todo: Check at start for limits - idle check
 Todo: Manual mode - potentiometer on the case for easy dyno tuning - Automatic, Potentiometer control, Full Throttle
-Todo: Debounce butoane shifter
 Todo: P1 error
 
 Hardware:
@@ -71,7 +74,6 @@ unsigned long SDCOpenTime = 0;
 
 void upShift();
 void downShift();
-
 enum gearShift {UPSHIFT, DOWNSHIFT, NOGEARSHIFT};
 gearShift gearShiftState = NOGEARSHIFT;
 
@@ -84,6 +86,7 @@ PID myPID(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 void setup() {
     noInterrupts();
     Serial.begin(9600);
+  
 
     
     myPID.SetMode(AUTOMATIC);
@@ -96,13 +99,17 @@ void setup() {
     digitalWrite(SDCPin, LOW);
     pinMode(faultyPin, OUTPUT);
     digitalWrite(faultyPin, LOW);
+    
     TCCR2B = (TCCR2B & 0b11111000) | 0x01;
 
-
-    // pinMode(2, INPUT_PULLUP);
-    // pinMode(3, INPUT_PULLUP);
-    // attachInterrupt(digitalPinToInterrupt(2), upShift, FALLING);
-    // attachInterrupt(digitalPinToInterrupt(3), downShift, FALLING);
+    pinMode(upshiftPIN, OUTPUT);
+    pinMode(downshiftPIN, OUTPUT);
+    analogWrite(upshiftPIN, 0);
+    analogWrite(downshiftPIN, 0);
+    pinMode(upshiftPIN, INPUT_PULLUP);
+    pinMode(downshiftPIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(2), upShift, FALLING);
+    attachInterrupt(digitalPinToInterrupt(3), downShift, FALLING);
 
     interrupts();
 }
@@ -111,6 +118,7 @@ int throttlePosition1, throttlePosition2, pedalPosition1, pedalPosition2;
 unsigned long currentMillis;
 
 void loop() {
+  
     //*Sensor readings
     throttlePosition1 = analogRead(throttlePositionSensor1);
     throttlePosition2 = analogRead(throttlePositionSensor2);
@@ -145,6 +153,7 @@ void loop() {
 
     input = throttlePosition1;
     setpoint = pedalPosition1;
+
 
  
     
@@ -212,10 +221,65 @@ void loop() {
 
  
      //*PID Computing
-    myPID.Compute();
-
-    if(output <= minPWMValue + 10 || error.hasAnyErrors() == 1) output = 0;
-    analogWrite(LPWM, output);
-   
     
+    switch(gearShiftState){
+      case UPSHIFT:
+        
+        if(millis()-gearShiftTime > upShiftTime) {
+          gearShiftState = NOGEARSHIFT;
+          upshiftButtonPressed = false;
+          analogWrite(upshiftPIN, 0);
+          analogWrite(downshiftPIN, 0);
+        }
+        else if (error.hasAnyErrors() == 0){
+          setpoint = 0;
+          analogWrite(upshiftPIN, 255);
+          analogWrite(downshiftPIN, 0);} 
+        break;
+  
+      case DOWNSHIFT:
+        if(millis()-gearShiftTime > downShiftTime) {
+          gearShiftState = NOGEARSHIFT;
+          downShiftButtonPressed = false;
+          analogWrite(downshiftPIN, 0);
+          analogWrite(upshiftPIN, 0);
+        }
+        else if (error.hasAnyErrors() == 0) {
+          setpoint = 255;
+          analogWrite(downshiftPIN, 255);
+          analogWrite(upshiftPIN, 0);
+        }
+        break;
+  
+      case NOGEARSHIFT:
+        if(upshiftButtonPressed == true) {
+          gearShiftTime = millis();
+          gearShiftState = UPSHIFT;
+          upshiftButtonPressed = false;
+        }
+
+        if(downShiftButtonPressed == true){
+          gearShiftTime = millis();
+          gearShiftState = DOWNSHIFT;
+          downShiftButtonPressed = false;          
+        }
+
+        break;
+    }
+    myPID.Compute();
+    
+    if(output <= minPWMValue + 10 || error.hasAnyErrors() == 1) output = 0;
+
+      analogWrite(LPWM, output);
+    
+
+
+  }
+
+  void upShift(){
+    upshiftButtonPressed = true; 
+  }
+
+  void downShift(){
+    downShiftButtonPressed = true;
   }
