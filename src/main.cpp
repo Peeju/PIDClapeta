@@ -14,8 +14,6 @@
 #define Kp 0.35
 #define Ki 2.13 
 #define Kd 0.00164870
-#define upShiftTime 300
-#define downShiftTime 300 //!Max 500 ms
 #define downShiftBlipPower 180
 #define sensorToleranceLow 10
 #define sensorToleranceHigh 10
@@ -72,6 +70,8 @@ volatile long gearShiftTime = 0;
 unsigned long time = millis();
 unsigned long SDCOpenTime = 0;
 
+uint16_t upShiftTime = 300;
+uint16_t downShiftTime = 300; //!Max 500 ms
 void upShift();
 void downShift();
 enum gearShift {UPSHIFT, DOWNSHIFT, NOGEARSHIFT};
@@ -272,7 +272,11 @@ void loop() {
 
       analogWrite(LPWM, output);
     
-
+  
+    upShiftTime = map(analogRead(upshiftTimePotentiometer), 0, 1024, 50, 500);
+    downShiftTime = map(analogRead(downshiftTimePotentiometer), 0, 1024, 50, 500);
+    Serial.println(downShiftTime);
+  
 
   }
 
