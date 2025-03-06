@@ -7,8 +7,8 @@
 #define ELPWM 12
 #define throttlePositionSensor1 A5
 #define throttlePositionSensor2 A4 //!A5 is Just for testing, need to be 2 different inputs
-#define pedalPositionSensor1 A1
-#define pedalPositionSensor2 A2 //!Just for testing, need to be 2 different inputs
+#define pedalPositionSensor1 A0
+#define pedalPositionSensor2 A1 //!Just for testing, need to be 2 different inputs
 #define maxPWMValue 150
 #define minPWMValue 60
 #define Kp 0.35
@@ -17,14 +17,6 @@
 #define downShiftBlipPower 180
 #define sensorToleranceLow 10
 #define sensorToleranceHigh 10
-#define tpsLowerBoundry1  311
-#define tpsUpperBoundry1  789
-#define tpsLowerBoundry2 729
-#define tpsUpperBoundry2 231
-#define ppsLowerBoundry1 200
-#define ppsUpperBoundry1 900
-#define ppsLowerBoundry2 200
-#define ppsUpperBoundry2 900
 #define pedalLED 7
 #define throttleLED 6
 #define targetLED 13
@@ -36,6 +28,8 @@
 #define downshiftPIN 9
 #define upshiftTimePotentiometer A6
 #define downshiftTimePotentiometer A6
+#define calibrationButton 12
+
 
 /*
 * Throttle position 1 311-725
@@ -59,8 +53,17 @@ Todo: P1 error
 
 Hardware:
 Todo: Resistor pull-up/pull-down pentru pinii A
-Todo: Potentiometre control shifter
+Potentiometre control shifter
+Tranzistori
 */
+uint16_t tpsLowerBoundry1 = 311;
+uint16_t tpsUpperBoundry1 = 789;
+uint16_t tpsLowerBoundry2 = 729;
+uint16_t tpsUpperBoundry2 = 231;
+uint16_t ppsLowerBoundry1 = 200;
+uint16_t ppsUpperBoundry1 = 900;
+uint16_t ppsLowerBoundry2 = 200;
+uint16_t ppsUpperBoundry2 = 900;
 
 unsigned long plausabilityTime = 0;
 unsigned long errorTime = 0;
@@ -69,6 +72,7 @@ volatile bool downShiftButtonPressed = false;
 volatile long gearShiftTime = 0;
 unsigned long time = millis();
 unsigned long SDCOpenTime = 0;
+void calibrate();
 
 uint16_t upShiftTime = 300;
 uint16_t downShiftTime = 300; //!Max 500 ms
@@ -82,7 +86,6 @@ errorCode error;
 
 double input, output, setpoint;
 PID myPID(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
-
 void setup() {
     noInterrupts();
     Serial.begin(9600);
@@ -111,14 +114,17 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(2), upShift, FALLING);
     attachInterrupt(digitalPinToInterrupt(3), downShift, FALLING);
 
+    pinMode(calibrationButton, INPUT_PULLUP);
     interrupts();
 }
 
 int throttlePosition1, throttlePosition2, pedalPosition1, pedalPosition2;
 unsigned long currentMillis;
 
+
+
 void loop() {
-  
+    if(digitalRead(calibrationButton) == 0) calibrate();
     //*Sensor readings
     throttlePosition1 = analogRead(throttlePositionSensor1);
     throttlePosition2 = analogRead(throttlePositionSensor2);
@@ -275,9 +281,7 @@ void loop() {
   
     upShiftTime = map(analogRead(upshiftTimePotentiometer), 0, 1024, 50, 500);
     downShiftTime = map(analogRead(downshiftTimePotentiometer), 0, 1024, 50, 500);
-    Serial.println(downShiftTime);
   
-
   }
 
   void upShift(){
@@ -286,4 +290,94 @@ void loop() {
 
   void downShift(){
     downShiftButtonPressed = true;
+  }
+
+  
+  void pedalCalibration(){
+    for(int i=0;i<8;i++){
+      digitalWrite(pedalLED, i%2);
+      delay(500);
+    }
+    Serial.println("Lower side calibration");
+
+    while(digitalRead(calibrationButton) == 1){
+      ppsLowerBoundry1 = analogRead(pedalPositionSensor1);
+      ppsLowerBoundry2 = analogRead(pedalPositionSensor2);
+      Serial.print(ppsLowerBoundry1);
+      Serial.print("   ");
+      Serial.println(ppsLowerBoundry2);
+    }
+
+    for(int i=0;i<8;i++){
+      digitalWrite(pedalLED, i%2);
+      delay(500);
+    }
+    digitalWrite(pedalLED, HIGH);
+    Serial.println("Upper side calibration");
+
+    while(digitalRead(calibrationButton) == 1){  
+      ppsUpperBoundry1 = analogRead(pedalPositionSensor1);
+      ppsUpperBoundry2 = analogRead(pedalPositionSensor2);
+      Serial.print(ppsUpperBoundry1);
+      Serial.print("   ");
+      Serial.println(ppsUpperBoundry2);
+    } 
+
+    Serial.println(ppsLowerBoundry1);
+    Serial.println(ppsLowerBoundry2);
+    Serial.println(ppsUpperBoundry1);
+    Serial.println(ppsUpperBoundry2);
+    
+    for(int i=0;i<8;i++){
+      digitalWrite(pedalLED, i%2);
+      delay(500);
+    }
+
+    digitalWrite(pedalLED, LOW);
+  }
+
+  void throttleCalibration() {
+    bool upper = true;
+    analogWrite(LPWM, 0);
+    delay(1000);
+    uint16_t currentValue = analogRead(throttlePositionSensor1);
+
+    while(upper) {
+      analogWrite(LPWM, 120);
+      Serial.println("Inainte de delay");
+      delay(2000);
+      Serial.println("Dupa delay");
+      uint16_t lastValue = currentValue;
+      currentValue = analogRead(throttlePositionSensor1);
+      uint16_t upperBound = lastValue * (1+0.05);
+
+      if(abs(currentValue - lastValue) <= 10){
+        Serial.print("in if");
+        Serial.println(abs(currentValue - lastValue));
+        upper=0;
+        tpsUpperBoundry1 = analogRead(throttlePositionSensor1);
+        tpsUpperBoundry2 = analogRead(throttlePositionSensor2);
+        analogWrite(LPWM, 0);
+      }
+
+    }
+    Serial.println("test");
+    delay(2000);
+
+    tpsLowerBoundry1 = analogRead(throttlePositionSensor1);
+    tpsLowerBoundry2 = analogRead(throttlePositionSensor2);
+    Serial.println(tpsLowerBoundry1);
+    Serial.println(tpsLowerBoundry2);
+    Serial.println(tpsUpperBoundry1);
+    Serial.println(tpsUpperBoundry2);
+
+
+    digitalWrite(LPWM, 0);
+  }
+  
+  void calibrate(){
+    pedalCalibration();
+    throttleCalibration();
+    
+
   }
