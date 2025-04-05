@@ -5,15 +5,16 @@
 
 #define LPWM 11
 #define ELPWM 12
+#define RPWM 5
 #define throttlePositionSensor1 A5
 #define throttlePositionSensor2 A4 //!A5 is Just for testing, need to be 2 different inputs
 #define pedalPositionSensor1 A0
 #define pedalPositionSensor2 A1 //!Just for testing, need to be 2 different inputs
-#define maxPWMValue 150
-#define minPWMValue 60
-#define Kp 0.35
-#define Ki 2.13 
-#define Kd 0.00164870
+#define maxPWMValue 200
+#define minPWMValue 0
+#define Kp 2.5
+#define Ki 1.74
+#define Kd 0.00971632
 #define downShiftBlipPower 180
 #define sensorToleranceLow 10
 #define sensorToleranceHigh 10
@@ -29,6 +30,7 @@
 #define upshiftTimePotentiometer A6
 #define downshiftTimePotentiometer A6
 #define calibrationButton 12
+#define RPWM 5
 
 
 /*
@@ -56,10 +58,10 @@ Todo: Resistor pull-up/pull-down pentru pinii A
 Potentiometre control shifter
 Tranzistori
 */
-uint16_t tpsLowerBoundry1 = 311;
-uint16_t tpsUpperBoundry1 = 789;
-uint16_t tpsLowerBoundry2 = 729;
-uint16_t tpsUpperBoundry2 = 231;
+uint16_t tpsLowerBoundry1 = 284;
+uint16_t tpsUpperBoundry1 = 755;
+uint16_t tpsLowerBoundry2 = 691;
+uint16_t tpsUpperBoundry2 = 241;
 uint16_t ppsLowerBoundry1 = 200;
 uint16_t ppsUpperBoundry1 = 900;
 uint16_t ppsLowerBoundry2 = 200;
@@ -124,12 +126,15 @@ unsigned long currentMillis;
 
 
 void loop() {
+    // Serial.println(millis());
     if(digitalRead(calibrationButton) == 0) calibrate();
     //*Sensor readings
     throttlePosition1 = analogRead(throttlePositionSensor1);
     throttlePosition2 = analogRead(throttlePositionSensor2);
     pedalPosition1 = analogRead(pedalPositionSensor1);
     pedalPosition2 = analogRead(pedalPositionSensor2);
+
+    
 
     //*Plausability checks
     if (throttlePosition1 < tpsLowerBoundry1 - sensorToleranceLow || throttlePosition1 > tpsUpperBoundry1 + sensorToleranceHigh) 
@@ -159,6 +164,7 @@ void loop() {
 
     input = throttlePosition1;
     setpoint = pedalPosition1;
+    
 
 
  
@@ -167,6 +173,7 @@ void loop() {
     currentMillis = millis();
     input = map(input, tpsLowerBoundry1, tpsUpperBoundry1, 0, 255);
     setpoint = map(setpoint, ppsLowerBoundry1, ppsUpperBoundry1, 0, 255);
+    
 
 
 
@@ -274,9 +281,18 @@ void loop() {
     }
     myPID.Compute();
     
-    if(output <= minPWMValue + 10 || error.hasAnyErrors() == 1) output = 0;
-
-      analogWrite(LPWM, output);
+    if(output <= minPWMValue || error.hasAnyErrors() == 1) {
+      output = 0;
+      analogWrite(LPWM, 0);
+      if(input>10 && error.hasAnyErrors() == 0 && gearShiftState == NOGEARSHIFT) analogWrite(RPWM, 60);
+      else analogWrite(RPWM, 0);
+    }
+    else {
+     analogWrite(RPWM, 0);
+     analogWrite(LPWM, output);
+    }
+    Serial.println(output);
+    
     
   
     upShiftTime = map(analogRead(upshiftTimePotentiometer), 0, 1024, 50, 500);
@@ -285,6 +301,7 @@ void loop() {
   }
 
   void upShift(){
+    Serial.println("UPSHIFT UPSHIFT UPSHIFT");
     upshiftButtonPressed = true; 
   }
 
