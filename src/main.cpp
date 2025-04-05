@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <PID/PID_v1.h>
 #include "error/error.hpp"
+#include <EEPROM.h>
 
 
 #define LPWM 11
@@ -12,7 +13,7 @@
 #define pedalPositionSensor2 A1 //!Just for testing, need to be 2 different inputs
 #define maxPWMValue 200
 #define minPWMValue 0
-#define Kp 2.5
+#define Kp 3.5
 #define Ki 1.74
 #define Kd 0.00971632
 #define downShiftBlipPower 180
@@ -23,7 +24,7 @@
 #define targetLED 13
 #define SDCPin 4
 #define faultyPin 13
-#define targetTime 3000
+#define targetTime 3000 //!!Just for testing, change to 1000 ms
 #define errorTimeConstant 3000
 #define upshiftPIN 8
 #define downshiftPIN 9
@@ -34,10 +35,11 @@
 
 
 /*
-* Throttle position 1 311-725
-* Throttle postion 2 729-231
-* Pedal position 1 0-1024
-* Pedal position 2 0-1024 
+* Throttle position 1 284-755
+* Throttle postion 2 691-241
+* Pedal position 1 200-900
+* Pedal position 2 200-900 
+
 
 Done:
 Plausability senzori clapeta
@@ -66,6 +68,9 @@ uint16_t ppsLowerBoundry1 = 200;
 uint16_t ppsUpperBoundry1 = 900;
 uint16_t ppsLowerBoundry2 = 200;
 uint16_t ppsUpperBoundry2 = 900;
+
+
+
 
 unsigned long plausabilityTime = 0;
 unsigned long errorTime = 0;
@@ -117,6 +122,21 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(3), downShift, FALLING);
 
     pinMode(calibrationButton, INPUT_PULLUP);
+
+    
+<<<<<<< Updated upstream
+    EEPROM.get(0, tpsLowerBoundry1);
+    EEPROM.get(2, tpsUpperBoundry1);
+    EEPROM.get(4, tpsLowerBoundry2);
+    EEPROM.get(6, tpsUpperBoundry2);
+
+    EEPROM.get(8, ppsLowerBoundry1);
+    EEPROM.get(10, ppsUpperBoundry1);
+    EEPROM.get(12, ppsLowerBoundry2);
+    EEPROM.get(14, ppsUpperBoundry2);
+=======
+>>>>>>> Stashed changes
+
     interrupts();
 }
 
@@ -284,14 +304,14 @@ void loop() {
     if(output <= minPWMValue || error.hasAnyErrors() == 1) {
       output = 0;
       analogWrite(LPWM, 0);
-      if(input>10 && error.hasAnyErrors() == 0 && gearShiftState == NOGEARSHIFT) analogWrite(RPWM, 60);
+      if(input>10 && error.hasAnyErrors() == 0 && gearShiftState == NOGEARSHIFT) analogWrite(RPWM, 100);
       else analogWrite(RPWM, 0);
     }
     else {
      analogWrite(RPWM, 0);
      analogWrite(LPWM, output);
     }
-    Serial.println(output);
+    
     
     
   
@@ -306,6 +326,7 @@ void loop() {
   }
 
   void downShift(){
+    Serial.println("DOWNSHIFT DOWNSHIFT DOWNUPSHIFT");
     downShiftButtonPressed = true;
   }
 
@@ -325,6 +346,14 @@ void loop() {
       Serial.println(ppsLowerBoundry2);
     }
 
+<<<<<<< Updated upstream
+    EEPROM.put(8, ppsLowerBoundry1);
+    EEPROM.put(12, ppsLowerBoundry2);
+
+    
+=======
+>>>>>>> Stashed changes
+
     for(int i=0;i<8;i++){
       digitalWrite(pedalLED, i%2);
       delay(500);
@@ -339,6 +368,9 @@ void loop() {
       Serial.print("   ");
       Serial.println(ppsUpperBoundry2);
     } 
+
+    EEPROM.put(10, ppsUpperBoundry1);
+    EEPROM.put(14, ppsUpperBoundry2);
 
     Serial.println(ppsLowerBoundry1);
     Serial.println(ppsLowerBoundry2);
@@ -383,6 +415,12 @@ void loop() {
 
     tpsLowerBoundry1 = analogRead(throttlePositionSensor1);
     tpsLowerBoundry2 = analogRead(throttlePositionSensor2);
+
+    EEPROM.put(0, tpsLowerBoundry1);
+    EEPROM.put(2, tpsUpperBoundry1);
+    EEPROM.put(4, tpsLowerBoundry2);
+    EEPROM.put(6, tpsUpperBoundry2);
+
     Serial.println(tpsLowerBoundry1);
     Serial.println(tpsLowerBoundry2);
     Serial.println(tpsUpperBoundry1);
